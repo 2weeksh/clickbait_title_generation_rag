@@ -1,14 +1,13 @@
-import os
 import json
-from litellm import completion
-from dotenv import load_dotenv
+from typing import Any, Dict, List
 
+from dotenv import load_dotenv
+from litellm import completion
 
 load_dotenv()
 
 # 인자 값
 GENERATE_TEMPERATURE = 1.0
-RESPONSE_FORMAT = {'type': 'json_object'}
 
 # 입,출력 경로
 INPUT_NEWS_PATH = "/home/joohyuk02/joohyuk/project1/output/rag_retrieval_results.json"
@@ -23,7 +22,7 @@ SYSTEM_PROMPT = """
 """.strip()
 
 # LLM프롬프트
-LLM_USER_PROMPT = """
+NAIVE_LLM_USER_PROMPT = """
 ### 입력 기사
 제목:{query_title}
 본문:{query_content}
@@ -41,14 +40,14 @@ RAG_USER_PROMPT = """
 {retrieved_title}
 """.strip()
 
-def generate_title(models):
 
+def generate_title(models: List[Dict[str, Any]]) -> List[Dict[str, str]]:
     # 최종 결과 저장 리스트
-    result = []
+    results = []
 
     # 기사 파일 열기
-    with open(INPUT_NEWS_PATH, 'r', encoding='utf-8') as f:
-            rag_data = json.load(f)
+    with open(INPUT_NEWS_PATH, "r", encoding="utf-8") as f:
+        rag_data = json.load(f)
 
     # 기사마다 반복
     for i, news in enumerate(rag_data):
@@ -56,7 +55,7 @@ def generate_title(models):
             "index": i,
             "query_title": news["query_title"].strip(),
             "query_content": news["query_content"].strip(),
-            "human_direct": news["human_direct_clickbait_title"].strip()
+            "human_direct": news["human_direct_clickbait_title"].strip(),
         }
 
         query_title = news["query_title"].strip()
@@ -68,6 +67,7 @@ def generate_title(models):
         for retrieved in retrieved_articles:
             clickbait_title = retrieved["clickbait_title"].strip()
             retrieved_title += f"- 낚시성 기사 제목: {clickbait_title}\n"
+
         retrieved_title = retrieved_title.strip()
 
         # 모델 설정
@@ -76,36 +76,29 @@ def generate_title(models):
             use_rag = model["use_rag"]
             output = model["output"]
 
-            if model_name == "openai/gpt-4o":
-                os.environ["OPENAI_API_KEY"] = os.getenv("OPENAI_API_KEY")
-            elif model_name == "gemini/gemini-2.0-flash-001":
-                os.environ["GOOGLE_API_KEY"] = os.getenv("GOOGLE_API_KEY")
+            if use_rag is True:
+                USER_PROMPT = RAG_USER_PROMPT.format(
+                    query_title=query_title, query_content=query_content, retrieved_title=retrieved_title
+                )
+            else:
+                USER_PROMPT = NAIVE_LLM_USER_PROMPT.format(query_title=query_title, query_content=query_content)
 
-            if use_rag == True:
-                USER_PROMPT = RAG_USER_PROMPT.format(query_title=query_title, query_content=query_content, retrieved_title=retrieved_title)
-            elif use_rag == False:
-                USER_PROMPT = LLM_USER_PROMPT.format(query_title=query_title, query_content=query_content)
-
-            messages = [
-                {"role": "system","content": SYSTEM_PROMPT},
-                {"role": "user", "content": USER_PROMPT}
-            ]
+            messages = [{"role": "system", "content": SYSTEM_PROMPT}, {"role": "user", "content": USER_PROMPT}]
 
             response = completion(
-                model = model_name,
-                messages = messages,
-                temperature = GENERATE_TEMPERATURE,
-                response_format = RESPONSE_FORMAT
+                model=model_name,
+                messages=messages,
+                temperature=GENERATE_TEMPERATURE,
+                response_format={"type": "json_object"},
             )
 
             clickbait_title = response["choices"][0]["message"]["content"].strip()
             merge_title[output] = clickbait_title
 
-        result.append(merge_title)
+        results.append(merge_title)
 
-    # 생성 결과 저장
-    with open(GENERATED_TITLE_PATH, "w", encoding="utf-8") as f:
-        json.dump(result, f, ensure_ascii=False, indent=4)
+    return results
+
 
 # 메인 실행
 if __name__ == "__main__":
@@ -118,4 +111,8 @@ if __name__ == "__main__":
         {"model": "gemini/gemini-2.0-flash-001", "use_rag": True, "output": "GEMINI_RAG"},
     ]
 
-    generate_title(models)
+    results = generate_title(models)
+
+    # 생성 결과 저장
+    with open(GENERATED_TITLE_PATH, "w", encoding="utf-8") as f:
+        json.dump(results, f, ensure_ascii=False, indent=4)
