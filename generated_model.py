@@ -1,17 +1,26 @@
+import argparse
 import json
 from typing import Any, Dict, List
 
 from dotenv import load_dotenv
 from litellm import completion
 
+# .env파일에서 API 키 불러오기
 load_dotenv()
 
-# 인자 값
-GENERATE_TEMPERATURE = 1.0
-
-# 입,출력 경로
-INPUT_NEWS_PATH = "/home/joohyuk02/joohyuk/project1/output/rag_retrieval_results.json"
-GENERATED_TITLE_PATH = "/home/joohyuk02/joohyuk/project1/output/merged_all_models_results.json"
+parser = argparse.ArgumentParser(description="뉴스 기사 제목을 생성하는 스크립트")
+# 경로 설정
+parser.add_argument(
+    "--input_path",
+    type=str,
+    default="/home/joohyuk02/joohyuk/project1/testtest/rag_retrieval_results.json",
+)
+parser.add_argument(
+    "--output_path",
+    type=str,
+    default="/home/joohyuk02/joohyuk/project1/testtest/merged_all_models_results.json",
+)
+args = parser.parse_args()
 
 # 시스템 프롬프트
 SYSTEM_PROMPT = """
@@ -41,16 +50,17 @@ RAG_USER_PROMPT = """
 """.strip()
 
 
-def generate_title(models: List[Dict[str, Any]]) -> List[Dict[str, str]]:
+def generate_title(models: List[Dict[str, Any]], input_path: str) -> List[Dict[str, Any]]:
     # 최종 결과 저장 리스트
     results = []
 
     # 기사 파일 열기
-    with open(INPUT_NEWS_PATH, "r", encoding="utf-8") as f:
+    with open(input_path, "r", encoding="utf-8") as f:
         rag_data = json.load(f)
 
     # 기사마다 반복
     for i, news in enumerate(rag_data):
+        # 기본 정보 결과 저장
         merge_title = {
             "index": i,
             "query_title": news["query_title"].strip(),
@@ -58,6 +68,7 @@ def generate_title(models: List[Dict[str, Any]]) -> List[Dict[str, str]]:
             "human_direct": news["human_direct_clickbait_title"].strip(),
         }
 
+        # 프롬프트에 들어갈 기사 준비
         query_title = news["query_title"].strip()
         query_content = news["query_content"].strip()
         retrieved_articles = news["retrieved_articles"]
@@ -70,12 +81,13 @@ def generate_title(models: List[Dict[str, Any]]) -> List[Dict[str, str]]:
 
         retrieved_title = retrieved_title.strip()
 
-        # 모델 설정
+        # 모델마다 반복해서 제목 생성
         for model in models:
             model_name = model["model"]
             use_rag = model["use_rag"]
             output = model["output"]
 
+            # rag 사용 여부에 따른 프롬프트 변경
             if use_rag is True:
                 USER_PROMPT = RAG_USER_PROMPT.format(
                     query_title=query_title, query_content=query_content, retrieved_title=retrieved_title
@@ -85,18 +97,23 @@ def generate_title(models: List[Dict[str, Any]]) -> List[Dict[str, str]]:
 
             messages = [{"role": "system", "content": SYSTEM_PROMPT}, {"role": "user", "content": USER_PROMPT}]
 
+            # 모델 호출
             response = completion(
                 model=model_name,
                 messages=messages,
-                temperature=GENERATE_TEMPERATURE,
+                temperature=1.0,
                 response_format={"type": "json_object"},
             )
 
+            # 생성된 제목 Dictionary에 추가
             clickbait_title = response["choices"][0]["message"]["content"].strip()
             merge_title[output] = clickbait_title
 
+        # 4개 모델이 생성한 제목 추가
         results.append(merge_title)
 
+        # 테스트용
+        break
     return results
 
 
@@ -105,14 +122,14 @@ if __name__ == "__main__":
 
     # 모델 config 값
     models = [
-        {"model": "openai/gpt-4o", "use_rag": False, "output": "GPT_LLM"},
-        {"model": "openai/gpt-4o", "use_rag": True, "output": "GPT_RAG"},
+        {"model": "gpt-4o", "use_rag": False, "output": "GPT_LLM"},
+        {"model": "gpt-4o", "use_rag": True, "output": "GPT_RAG"},
         {"model": "gemini/gemini-2.0-flash-001", "use_rag": False, "output": "GEMINI_LLM"},
         {"model": "gemini/gemini-2.0-flash-001", "use_rag": True, "output": "GEMINI_RAG"},
     ]
 
-    results = generate_title(models)
+    results = generate_title(models, args.input_path)
 
     # 생성 결과 저장
-    with open(GENERATED_TITLE_PATH, "w", encoding="utf-8") as f:
+    with open(args.output_path, "w", encoding="utf-8") as f:
         json.dump(results, f, ensure_ascii=False, indent=4)
