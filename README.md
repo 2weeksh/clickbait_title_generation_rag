@@ -38,38 +38,18 @@ LLM이 참조 정보를 바탕으로 최종 제목을 생성합니다.
 
 ⚙️ 설치 및 실행 방법
 1. 저장소 복제 (Clone)
-Bash
-
 git clone https://github.com/2weeksh/clickbait_title_generation_rag.git
 cd clickbait_title_generation_rag
-2. 필요 라이브러리 설치
-Bash
 
+2. 필요 라이브러리 설치
 pip install -r requirements.txt
+
 3. API 키 설정
 프로젝트 루트 디렉터리에 .env 파일을 생성하고 사용하시는 LLM의 API 키를 입력하세요.
-
-코드 스니펫
 
 # .env 파일 예시
 OPENAI_API_KEY="sk-..."
 GOOGLE_API_KEY="..."
 
-# 예시: 단일 기사에 대한 제목 생성
-python generate_title.py --model "GPT-4o" --method "RAG" --file_path "./data/sample_article.txt"
-📊 실험 결과
+# 실험 결과
 LLM 자동 평가 및 사용자 설문 평가 결과, Gemini-2.0-Flash (RAG) 모델이 가장 흥미로운 제목을 생성하는 것으로 나타났습니다. 또한 RAG를 적용한 모델들이 Direct 방식보다 더 높은 선호도와 본문 연관성을 보였습니다.
-
-모델명	선호도 비율(%) (LLM 평가)	선호도 비율(%) (사람 평가)	관련 없음 비율(%) (사람 평가)
-Gemini-2.0-Flash (RAG)	30.5	33.4%	14.6%
-Gemini-2.0-Flash (Direct)	23.5	24.3%	17.7%
-GPT-4o (RAG)	22.0	22.3%	9.2%
-GPT-4o (Direct)	21.5	20.0%	9.4%
-사람 직접 작성	2.5	-	-
-
-@article{lee2025generating,
-  title={대형 언어 모델과 검색 증강 생성 기법을 활용한 클릭 유도성 기사 제목 생성},
-  author={이주혁, 강경필},
-  journal={강원대학교 학부생논문},
-  year={2025}
-}
